@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VeriFrame — AI Video Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #080c10;
+    --surface:   #0d1117;
+    --border:    #1e2d3d;
+    --accent:    #00e5ff;
+    --warn:      #ff6b35;
+    --safe:      #39ff14;
+    --mid:       #ffd60a;
+    --text:      #c9d1d9;
+    --dim:       #586069;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-head: 'Syne', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,229,255,0.015) 2px,
+      rgba(0,229,255,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid background */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .logo-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    position: relative;
+    animation: pulse-border 3s infinite;
+  }
+
+  .logo-icon::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+    animation: blink 2s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 0px var(--accent); }
+    50%       { box-shadow: 0 0 16px rgba(0,229,255,0.4); }
+  }
+
+  h1 {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .tagline {
+    font-size: 0.78rem;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  /* ── DROP ZONE ── */
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,229,255,0.04) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: #0d1820;
+  }
+
+  .drop-zone:hover::before, .drop-zone.dragover::before {
+    opacity: 1;
+  }
+
+  .drop-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    display: block;
+    filter: grayscale(1) brightness(0.5);
+    transition: filter 0.3s;
+  }
+
+  .drop-zone:hover .drop-icon { filter: none; }
+
+  .drop-title {
+    font-family: var(--font-head);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .drop-sub {
+    font-size: 0.75rem;
+    color: var(--dim);
+    line-height: 1.8;
+  }
+
+  .drop-sub strong { color: var(--accent); }
+
+  .file-input { display: none; }
+
+  .browse-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 28px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 3px;
+    transition: all 0.2s;
+  }
+
+  .browse-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  /* ── ANALYSIS PANEL ── */
+  #analysis-panel { display: none; margin-top: 32px; }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-family: var(--font-head);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1s infinite;
+  }
+
+  .status-dot.done  { background: var(--safe); animation: none; }
+  .status-dot.error { background: var(--warn); animation: none; }
+
+  /* Progress steps */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--dim);
+    transition: all 0.4s;
+    line-height: 1.4;
+  }
+
+  .step.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,255,0.05);
+    box-shadow: 0 0 10px rgba(0,229,255,0.15);
+  }
+
+  .step.done {
+    border-color: var(--safe);
+    color: var(--safe);
+    background: rgba(57,255,20,0.05);
+  }
+
+  .step-label { display: block; margin-top: 4px; }
+
+  /* ── RESULT CARD ── */
+  #result-card { display: none; margin-top: 8px; }
+
+  .verdict-banner {
+    border-radius: 6px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .verdict-banner::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    opacity: 0.06;
+  }
+
+  .verdict-banner.ai {
+    background: rgba(255,107,53,0.08);
+    border: 1px solid rgba(255,107,53,0.4);
+  }
+  .verdict-banner.ai::after { background: var(--warn); }
+
+  .verdict-banner.human {
+    background: rgba(57,255,20,0.06);
+    border: 1px solid rgba(57,255,20,0.3);
+  }
+  .verdict-banner.human::after { background: var(--safe); }
+
+  .verdict-banner.uncertain {
+    background: rgba(255,214,10,0.06);
+    border: 1px solid rgba(255,214,10,0.3);
+  }
+  .verdict-banner.uncertain::after { background: var(--mid); }
+
+  .verdict-score {
+    font-family: var(--font-head);
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1;
+    min-width: 90px;
+  }
+
+  .verdict-banner.ai       .verdict-score { color: var(--warn); }
+  .verdict-banner.human    .verdict-score { color: var(--safe); }
+  .verdict-banner.uncertain .verdict-score { color: var(--mid); }
+
+  .verdict-info {}
+  .verdict-label {
+    font-family: var(--font-head);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .verdict-confidence {
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Score bar */
+  .score-bar-wrap {
+    margin-bottom: 28px;
+  }
+
+  .score-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .score-bar-track {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+    width: 0%;
+    background: linear-gradient(90deg, var(--safe) 0%, var(--mid) 50%, var(--warn) 100%);
+  }
+
+  .score-bar-marker {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 16px;
+    background: rgba(255,255,255,0.5);
+    transform: translateX(-50%);
+    transition: left 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  /* Signal grid */
+  .signals-title {
+    font-size: 0.72rem;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .signals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .signal-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+  }
+
+  .signal-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .signal-name {
+    font-size: 0.7rem;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .signal-val {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: var(--text);
+  }
+
+  .signal-bar-track {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .signal-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+    width: 0%;
+  }
+
+  /* ── STATUS MESSAGE ── */
+  .status-msg {
+    font-size: 0.75rem;
+    color: var(--dim);
+    text-align: center;
+    padding: 12px;
+    letter-spacing: 0.05em;
+  }
+
+  .status-msg.err { color: var(--warn); }
+
+  /* ── RESET ── */
+  #reset-btn {
+    display: none;
+    margin: 28px auto 0;
+    padding: 10px 32px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+  }
+
+  #reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    margin-top: 64px;
+    font-size: 0.68rem;
+    color: var(--border);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 560px) {
+    .steps { grid-template-columns: repeat(3, 1fr); }
+    .signals-grid { grid-template-columns: 1fr; }
+    .verdict-score { font-size: 2.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-line">
+      <div class="logo-icon"></div>
+      <h1>Veri<span>Frame</span></h1>
+    </div>
+    <p class="tagline">AI-Generated Video Detection System</p>
+  </header>
+
+  <!-- DROP ZONE -->
+  <div class="drop-zone" id="drop-zone">
+    <span class="drop-icon">🎬</span>
+    <p class="drop-title">Drop your video here</p>
+    <p class="drop-sub">
+      Supports <strong>MP4, MOV, AVI, MKV, WEBM</strong> and more<br/>
+      The engine will analyze frequency patterns, noise floor,<br/>temporal consistency &amp; DCT coefficients
+    </p>
+    <button class="browse-btn" onclick="document.getElementById('file-input').click()">
+      Browse File
+    </button>
+    <input type="file" class="file-input" id="file-input"
+           accept="video/*,.mkv,.avi,.flv,.wmv,.3gp"/>
+  </div>
+
+  <!-- ANALYSIS PANEL -->
+  <div id="analysis-panel">
+    <div class="panel-header">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="panel-title" id="panel-title">Analyzing</span>
+    </div>
+
+    <!-- Steps -->
+    <div class="steps" id="steps-container">
+      <div class="step" data-step="1">📡<span class="step-label">Frame Extract</span></div>
+      <div class="step" data-step="2">〰️<span class="step-label">FFT Analysis</span></div>
+      <div class="step" data-step="3">🔬<span class="step-label">Noise Floor</span></div>
+      <div class="step" data-step="4">⏱️<span class="step-label">Temporal</span></div>
+      <div class="step" data-step="5">📊<span class="step-label">DCT Coeffs</span></div>
+      <div class="step" data-step="6">🔍<span class="step-label">Edge Check</span></div>
+    </div>
+
+    <div class="status-msg" id="status-msg">Starting analysis...</div>
+
+    <!-- RESULT CARD -->
+    <div id="result-card">
+
+      <!-- Verdict banner -->
+      <div class="verdict-banner" id="verdict-banner">
+        <div class="verdict-score" id="verdict-score">--</div>
+        <div class="verdict-info">
+          <div class="verdict-label" id="verdict-label">—</div>
+          <div class="verdict-confidence" id="verdict-confidence">—</div>
+        </div>
+      </div>
+
+      <!-- Score bar -->
+      <div class="score-bar-wrap">
+        <div class="score-bar-labels">
+          <span>Human Filmed</span>
+          <span>AI Generated</span>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill" id="score-bar-fill"></div>
+          <div class="score-bar-marker" id="score-bar-marker"></div>
+        </div>
+      </div>
+
+      <!-- Signal breakdown -->
+      <p class="signals-title">Signal Breakdown</p>
+      <div class="signals-grid" id="signals-grid"></div>
+    </div>
+
+    <!-- Reset -->
+    <button id="reset-btn" onclick="resetApp()">↺ Analyze Another Video</button>
+  </div>
+
+  <footer>VeriFrame v1.0 &nbsp;·&nbsp; Frequency + Temporal + Noise Analysis</footer>
+</div>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const panel      = document.getElementById('analysis-panel');
+  const statusMsg  = document.getElementById('status-msg');
+  const statusDot  = document.getElementById('status-dot');
+  const panelTitle = document.getElementById('panel-title');
+  const resultCard = document.getElementById('result-card');
+  const resetBtn   = document.getElementById('reset-btn');
+
+  let pollInterval = null;
+
+  // ── DRAG & DROP ──
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) uploadFile(fileInput.files[0]);
+  });
+
+  // ── UPLOAD ──
+  async function uploadFile(file) {
+    dropZone.style.display = 'none';
+    panel.style.display    = 'block';
+    setStep(0);
+    statusMsg.textContent  = `Uploading ${file.name}...`;
+
+    const form = new FormData();
+    form.append('video', file);
+
+    try {
+      const res  = await fetch('/upload', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (data.error) { showError(data.error); return; }
+
+      pollStatus(data.job_id);
+    } catch (err) {
+      showError('Upload failed. Is the server running?');
+    }
+  }
+
+  // ── POLL STATUS ──
+  function pollStatus(jobId) {
+    pollInterval = setInterval(async () => {
+      try {
+        const res  = await fetch(`/status/${jobId}`);
+        const data = await res.json();
+
+        setStep(data.step);
+        statusMsg.textContent = data.message || '...';
+
+        if (data.status === 'done') {
+          clearInterval(pollInterval);
+          showResult(data.result);
+        } else if (data.status === 'error') {
+          clearInterval(pollInterval);
+          showError(data.error || 'Analysis failed.');
+        }
+      } catch (err) {
+        clearInterval(pollInterval);
+        showError('Lost connection to server.');
+      }
+    }, 600);
+  }
+
+  // ── STEPS ──
+  function setStep(current) {
+    document.querySelectorAll('.step').forEach(el => {
+      const n = parseInt(el.dataset.step);
+      el.className = 'step' + (n < current ? ' done' : n === current ? ' active' : '');
+    });
+  }
+
+  // ── SHOW RESULT ──
+  function showResult(result) {
+    statusMsg.style.display = 'none';
+    setStep(7); // all done
+
+    statusDot.className = 'status-dot done';
+    panelTitle.textContent = 'Analysis Complete';
+
+    const score   = result.ai_score;
+    const verdict = result.verdict;
+    const conf    = result.confidence;
+
+    // Banner
+    const banner = document.getElementById('verdict-banner');
+    banner.className = 'verdict-banner ' +
+      (verdict === 'AI-Generated' ? 'ai' : verdict === 'Human-Filmed' ? 'human' : 'uncertain');
+
+    document.getElementById('verdict-score').textContent = score;
+    document.getElementById('verdict-label').textContent = verdict;
+    document.getElementById('verdict-confidence').textContent =
+      `${conf} Confidence · ${result.details.frames_analyzed} frames analyzed`;
+
+    // Score bar
+    setTimeout(() => {
+      document.getElementById('score-bar-fill').style.width   = score + '%';
+      document.getElementById('score-bar-marker').style.left  = score + '%';
+    }, 100);
+
+    // Signals
+    const grid    = document.getElementById('signals-grid');
+    const signals = result.signals;
+    const labels  = {
+      fft_hf:       'FFT High-Freq',
+      fft_flatness: 'Spectral Flatness',
+      fft_slope:    'Radial Slope',
+      noise_mag:    'Noise Level',
+      noise_kurt:   'Noise Kurtosis',
+      noise_var:    'Noise Variance',
+      temp_delta:   'Frame Delta',
+      temp_flow:    'Optical Flow',
+      dct_kurt:     'DCT Kurtosis',
+      dct_ac:       'DCT AC Energy',
+      edge_density: 'Edge Density',
+      edge_grad:    'Gradient Var',
+    };
+
+    grid.innerHTML = '';
+    Object.entries(signals).forEach(([key, val]) => {
+      const color = val > 65 ? 'var(--warn)' : val > 40 ? 'var(--mid)' : 'var(--safe)';
+      grid.innerHTML += `
+        <div class="signal-row">
+          <div class="signal-top">
+            <span class="signal-name">${labels[key] || key}</span>
+            <span class="signal-val" style="color:${color}">${val}</span>
+          </div>
+          <div class="signal-bar-track">
+            <div class="signal-bar-fill" style="width:0%;background:${color}"
+                 data-target="${val}"></div>
+          </div>
+        </div>`;
+    });
+
+    // Animate bars
+    setTimeout(() => {
+      document.querySelectorAll('.signal-bar-fill').forEach(bar => {
+        bar.style.width = bar.dataset.target + '%';
+      });
+    }, 200);
+
+    resultCard.style.display = 'block';
+    resetBtn.style.display   = 'block';
+  }
+
+  // ── ERROR ──
+  function showError(msg) {
+    statusDot.className   = 'status-dot error';
+    panelTitle.textContent = 'Error';
+    statusMsg.className   = 'status-msg err';
+    statusMsg.textContent = '⚠ ' + msg;
+    resetBtn.style.display = 'block';
+  }
+
+  // ── RESET ──
+  function resetApp() {
+    if (pollInterval) clearInterval(pollInterval);
+    dropZone.style.display   = '';
+    panel.style.display      = 'none';
+    resultCard.style.display = 'none';
+    resetBtn.style.display   = 'none';
+    statusMsg.className      = 'status-msg';
+    statusDot.className      = 'status-dot';
+    panelTitle.textContent   = 'Analyzing';
+    fileInput.value          = '';
+    document.getElementById('signals-grid').innerHTML = '';
+    document.getElementById('score-bar-fill').style.width  = '0%';
+    document.getElementById('score-bar-marker').style.left = '0%';
+  }
+</script>
+</body>
+</html>
