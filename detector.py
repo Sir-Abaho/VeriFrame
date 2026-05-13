@@ -20,8 +20,8 @@ warnings.filterwarnings("ignore")
 # ─────────────────────────────────────────────
 #  CONFIG
 # ─────────────────────────────────────────────
-MAX_FRAMES        = 40      # frames sampled per video
-FRAME_RESIZE      = (256, 256)  # resize for consistent analysis
+MAX_FRAMES        = 20      # frames sampled per video
+FRAME_RESIZE      = (160, 160)  # resize for consistent analysis
 TEMPORAL_PAIRS    = 15      # consecutive frame pairs for motion analysis
 
 
@@ -459,7 +459,7 @@ def analyze_video(video_path: str, progress_callback=None) -> dict:
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     import sys, json
-
+ 
     if len(sys.argv) < 2:
         print("Usage: python detector.py <video_file>")
         sys.exit(1)
