@@ -20,10 +20,13 @@ warnings.filterwarnings("ignore")
 # ─────────────────────────────────────────────
 #  CONFIG
 # ─────────────────────────────────────────────
-MAX_FRAMES        = 20      # frames sampled per video
-FRAME_RESIZE      = (160, 160)  # resize for consistent analysis
+MAX_FRAMES        = 12      # frames sampled per video
+FRAME_RESIZE      = (128, 128)  # resize for consistent analysis
 TEMPORAL_PAIRS    = 15      # consecutive frame pairs for motion analysis
 
+print("=== OPTIMISED BUILD ACTIVE ===")
+print("MAX_FRAMES =", MAX_FRAMES)
+print("FRAME_RESIZE =", FRAME_RESIZE)
 
 # ─────────────────────────────────────────────
 #  FRAME SAMPLER
