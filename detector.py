@@ -392,7 +392,7 @@ def compute_score(fft_stats: dict, noise_stats: dict,
     raw_score = sum(signals[k] * weights[k] for k in signals) / total_weight
     ai_score  = round(raw_score * 100, 1)
 
-    if ai_score >= 40:
+    if ai_score >= 43:
         verdict = "AI-Generated"
     else:
         verdict = "Human-Filmed"
