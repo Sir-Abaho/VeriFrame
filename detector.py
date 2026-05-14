@@ -392,20 +392,14 @@ def compute_score(fft_stats: dict, noise_stats: dict,
     raw_score = sum(signals[k] * weights[k] for k in signals) / total_weight
     ai_score  = round(raw_score * 100, 1)
 
-    if ai_score >= 68:
+    if ai_score >= 40:
         verdict = "AI-Generated"
-        confidence = "High" if ai_score >= 80 else "Moderate"
-    elif ai_score >= 42:
-        verdict = "Uncertain"
-        confidence = "Low"
     else:
         verdict = "Human-Filmed"
-        confidence = "High" if ai_score <= 28 else "Moderate"
 
     return {
         "ai_score":    ai_score,
         "verdict":     verdict,
-        "confidence":  confidence,
         "signals":     {k: round(v * 100, 1) for k, v in signals.items()},
     }
 
